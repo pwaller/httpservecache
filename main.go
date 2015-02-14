@@ -57,12 +57,13 @@ func NewCacher(bucket, prefix string, rq requestKey, sizeMiB int64) *Cacher {
 		errorHandler: nil, // TODO(pwaller): provide access
 	}
 
-	cacher.Group = groupcache.NewGroup(groupName, size, cacher)
+	getter := groupcache.GetterFunc(cacher.fill)
+	cacher.Group = groupcache.NewGroup(groupName, size, getter)
 	return cacher
 }
 
 // Perform the http request on the underlying http Handler.
-func (c *Cacher) Get(
+func (c *Cacher) fill(
 	ctx groupcache.Context,
 	key string,
 	dest groupcache.Sink,
