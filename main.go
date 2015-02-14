@@ -14,16 +14,17 @@ import (
 )
 
 // Function used to determine the key.
-type RequestKey func(r *http.Request) string
+type requestKey func(r *http.Request) string
 
-func (f RequestKey) RequestKey(r *http.Request) string { return f(r) }
+func (f requestKey) requestKey(r *http.Request) string { return f(r) }
 
+// Default handler just keys on the r.URL.Path
 func DefaultRequestKey(r *http.Request) string {
 	return r.URL.Path
 }
 
-type RequestContext struct {
-	CacheHandler
+type requestContext struct {
+	cacheHandler
 	*http.Request
 }
 
@@ -31,7 +32,7 @@ type RequestContext struct {
 type Cacher struct {
 	bucket, keyPrefix string
 	*groupcache.Group
-	requestKey RequestKey
+	requestKey requestKey
 
 	// If nil, shows an ugly message.
 	// TODO(pwaller): communicate the original `err` via the *r.Request, maybe
@@ -40,7 +41,7 @@ type Cacher struct {
 }
 
 // Construct a new Cacher
-func NewCacher(bucket, prefix string, rq RequestKey, sizeMiB int64) *Cacher {
+func NewCacher(bucket, prefix string, rq requestKey, sizeMiB int64) *Cacher {
 
 	groupName := fmt.Sprint("servecache://", bucket, "/", prefix)
 	size := sizeMiB << 20
@@ -66,9 +67,9 @@ func (c *Cacher) Get(
 	key string,
 	dest groupcache.Sink,
 ) error {
-	rc, ok := ctx.(RequestContext)
+	rc, ok := ctx.(requestContext)
 	if !ok {
-		return fmt.Errorf("Cacher.Get: expected RequestContext, got %T", ctx)
+		log.Panicf("Cacher.Get: expected RequestContext, got %T", ctx)
 	}
 
 	w := httptest.NewRecorder()
@@ -97,26 +98,26 @@ func (c *Cacher) Get(
 
 // Wrap a http.Handler
 func (c *Cacher) H(h http.Handler) http.Handler {
-	return CacheHandler{c, h}
+	return cacheHandler{c, h}
 }
 
 // Wrap a http.HandlerFunc
 func (c *Cacher) F(h http.HandlerFunc) http.Handler {
-	return CacheHandler{c, h}
+	return cacheHandler{c, h}
 }
 
 // http.Handler which wraps a particular http.Handler
-type CacheHandler struct {
+type cacheHandler struct {
 	*Cacher
 	http.Handler
 }
 
 // Fetch the response via groupcache
-func (ch CacheHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (ch cacheHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var response pb.Response
 
-	ctx := RequestContext{ch, r}
+	ctx := requestContext{ch, r}
 
 	err := ch.Group.Get(ctx, ch.requestKey(r), groupcache.ProtoSink(&response))
 	if err != nil {
