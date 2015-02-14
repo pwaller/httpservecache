@@ -13,15 +13,6 @@ import (
 	"github.com/pwaller/httpservecache/pb"
 )
 
-func Example() {
-	cache := New("example", nil, 128)
-	http.Handle("/cached", cache.F(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "This response was very expensive to compute, but is cached.")
-	}))
-	http.ListenAndServe(":8000", nil)
-}
-
 // Function used to determine the key.
 type requestKey func(r *http.Request) string
 

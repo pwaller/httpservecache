@@ -1,12 +1,22 @@
 package httpservecache
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-func TestCacher(t *testing.T) {
+func Example() {
+	cache := New("example", nil, 128)
+	http.Handle("/cached", cache.F(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "This response was very expensive to compute, but is cached.")
+	}))
+	http.ListenAndServe(":8000", nil)
+}
+
+func TestGroup(t *testing.T) {
 	c := New("test", nil, 64)
 
 	msg := []byte("Hello from expensive request\n")
