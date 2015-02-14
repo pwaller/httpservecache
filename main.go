@@ -18,9 +18,9 @@ type requestKey func(r *http.Request) string
 
 func (f requestKey) requestKey(r *http.Request) string { return f(r) }
 
-// Default handler keys on the r.URL.Path.
+// Default handler keys on the r.URL.String().
 func DefaultRequestKey(r *http.Request) string {
-	return r.URL.Path
+	return r.URL.String()
 }
 
 type requestContext struct {
@@ -28,8 +28,16 @@ type requestContext struct {
 	*http.Request
 }
 
-//
-type Cacher struct {
+// A Group wraps a groupcache.Group.
+// It provides two methods, `H` and `F` which wrap a `http.Handler` and
+// `http.HandlerFunc` respectively.
+// The wrapped handlers only invoke the underlying handler if the request has
+// not yet been cached. The cache key is determined by the `requestKey`
+// function. The underlying handler is invoked on whatever `*http.Request`
+// happens to need the cache filling, so the http.Handler's response MUST only
+// depend on variables of the `*http.Request` which the `requestKey` uses to
+// construct the key.
+type Group struct {
 	*groupcache.Group
 	requestKey requestKey
 
@@ -39,33 +47,42 @@ type Cacher struct {
 	errorHandler http.Handler
 }
 
-// Construct a new Cacher
-func New(groupName string, rq func(r *http.Request) string, sizeMiB int64) *Cacher {
+// Construct a new `Group` called `groupName`.
+// `requestKey` is used to determine how requests are cached. Two requests both
+// which both product the same value for `requestKey(r)` will be considered
+// equivalent in the eyes of the cache.
+// `sizeMiB` specifies how much memory the groupcache is allowed to use.
+// If `requestKey` is nil, the r.URL.String() is used.
+func New(
+	groupName string,
+	requestKey func(r *http.Request) string,
+	sizeMiB int64,
+) *Group {
 	size := sizeMiB << 20
 
-	if rq == nil {
-		rq = DefaultRequestKey
+	if requestKey == nil {
+		requestKey = DefaultRequestKey
 	}
 
-	cacher := &Cacher{
-		requestKey:   rq,
+	group := &Group{
+		requestKey:   requestKey,
 		errorHandler: nil, // TODO(pwaller): provide access
 	}
 
-	getter := groupcache.GetterFunc(cacher.fill)
-	cacher.Group = groupcache.NewGroup(groupName, size, getter)
-	return cacher
+	getter := groupcache.GetterFunc(group.fill)
+	group.Group = groupcache.NewGroup(groupName, size, getter)
+	return group
 }
 
 // Perform the http request on the underlying http Handler.
-func (c *Cacher) fill(
+func (c *Group) fill(
 	ctx groupcache.Context,
 	key string,
 	dest groupcache.Sink,
 ) error {
 	rc, ok := ctx.(requestContext)
 	if !ok {
-		log.Panicf("Cacher.Get: expected RequestContext, got %T", ctx)
+		log.Panicf("Group.Get: expected RequestContext, got %T", ctx)
 	}
 
 	w := httptest.NewRecorder()
@@ -92,19 +109,19 @@ func (c *Cacher) fill(
 
 }
 
-// Wrap a http.Handler
-func (c *Cacher) H(h http.Handler) http.Handler {
+// Wrap a http.Handler.
+func (c *Group) H(h http.Handler) http.Handler {
 	return cacheHandler{c, h}
 }
 
-// Wrap a http.HandlerFunc
-func (c *Cacher) F(h http.HandlerFunc) http.Handler {
+// Wrap a http.HandlerFunc.
+func (c *Group) F(h http.HandlerFunc) http.Handler {
 	return cacheHandler{c, h}
 }
 
 // http.Handler which wraps a particular http.Handler
 type cacheHandler struct {
-	*Cacher
+	*Group
 	http.Handler
 }
 
