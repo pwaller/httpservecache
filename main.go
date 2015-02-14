@@ -30,7 +30,6 @@ type requestContext struct {
 
 //
 type Cacher struct {
-	bucket, keyPrefix string
 	*groupcache.Group
 	requestKey requestKey
 
@@ -41,9 +40,7 @@ type Cacher struct {
 }
 
 // Construct a new Cacher
-func NewCacher(bucket, prefix string, rq requestKey, sizeMiB int64) *Cacher {
-
-	groupName := fmt.Sprint("servecache://", bucket, "/", prefix)
+func New(groupName string, rq func(r *http.Request) string, sizeMiB int64) *Cacher {
 	size := sizeMiB << 20
 
 	if rq == nil {
@@ -51,8 +48,6 @@ func NewCacher(bucket, prefix string, rq requestKey, sizeMiB int64) *Cacher {
 	}
 
 	cacher := &Cacher{
-		bucket:       bucket,
-		keyPrefix:    prefix,
 		requestKey:   rq,
 		errorHandler: nil, // TODO(pwaller): provide access
 	}
@@ -120,7 +115,7 @@ func (ch cacheHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ctx := requestContext{ch, r}
 
-	err := ch.Group.Get(ctx, ch.requestKey(r), groupcache.ProtoSink(&response))
+	err := ch.Get(ctx, ch.requestKey(r), groupcache.ProtoSink(&response))
 	if err != nil {
 		if ch.errorHandler != nil {
 			ch.errorHandler.ServeHTTP(w, r)

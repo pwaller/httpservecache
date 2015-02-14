@@ -7,12 +7,11 @@ import (
 )
 
 func TestCacher(t *testing.T) {
-	c := NewCacher("b", "p", nil, 64)
+	c := New("test", nil, 64)
 
 	msg := []byte("Hello from expensive request\n")
 
 	nGet := 0
-
 	h := c.F(func(w http.ResponseWriter, r *http.Request) {
 		nGet++
 		t.Log("!!! Doing expensive request !!!")
@@ -25,7 +24,6 @@ func TestCacher(t *testing.T) {
 	}
 
 	const nReq = 10
-
 	for i := 0; i < nReq; i++ {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
@@ -37,6 +35,10 @@ func TestCacher(t *testing.T) {
 		if string(w.Body.Bytes()) != string(msg) {
 			t.Errorf("Response body != msg (=%q) ", msg)
 		}
+	}
+
+	if nGet != 1 {
+		t.Error("nGet != 1 (=%d)", nGet)
 	}
 
 	hits := c.Stats.CacheHits.Get()
