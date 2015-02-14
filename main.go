@@ -1,3 +1,5 @@
+// Work in progress. HTTP middleware which automatically groupcaches things.
+//
 package httpservecache
 
 import (
