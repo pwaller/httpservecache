@@ -18,9 +18,9 @@ type requestKey func(r *http.Request) string
 
 func (f requestKey) requestKey(r *http.Request) string { return f(r) }
 
-// Default handler keys on the r.URL.Path.
+// Default handler keys on the r.URL.String().
 func DefaultRequestKey(r *http.Request) string {
-	return r.URL.Path
+	return r.URL.String()
 }
 
 type requestContext struct {
